@@ -1,0 +1,101 @@
+{
+  "definition": {
+    "subscriptions": {
+      "big_number": {
+        "name": "big_number",
+        "columns": [
+          {
+            "column": "is_user_generated",
+            "aggregation": "SUM",
+            "alias": "Sum of is_user_generated",
+            "format": {
+              "type": "abbreviated",
+              "format": "#"
+            }
+          }
+        ],
+        "filters": [],
+        "orderBy": [],
+        "groupBy": [],
+        "fiscal": false,
+        "projection": false,
+        "distinct": false,
+        "limit": 1
+      },
+      "main": {
+        "name": "main",
+        "columns": [
+          {
+            "column": "user_id",
+            "mapping": "VALUE"
+          }
+        ],
+        "filters": [],
+        "orderBy": [],
+        "groupBy": [],
+        "fiscal": false,
+        "projection": false,
+        "distinct": false,
+        "dateGrain": {
+          "column": "Time"
+        }
+      }
+    },
+    "formulas": {
+      "dsUpdated": [],
+      "dsDeleted": [],
+      "card": []
+    },
+    "annotations": {
+      "new": [],
+      "modified": [],
+      "deleted": []
+    },
+    "conditionalFormats": {
+      "card": [],
+      "datasource": [
+        {
+          "dataSourceId": "some_id",
+          "condition": {
+            "column": "user_id",
+            "values": [],
+            "dataSourceId": "some_id",
+            "filterType": "LEGACY"
+          },
+          "format": {}
+        }
+      ]
+    },
+    "slicers": [],
+    "controls": [],
+    "defaultVariables": [],
+    "segments": {
+      "active": [],
+      "create": [],
+      "update": [],
+      "delete": []
+    },
+    "charts": {
+      "main": {
+        "component": "main",
+        "chartType": "badge_table",
+        "overrides": {},
+        "goal": null
+      }
+    },
+    "title": "test_blank_4",
+    "description": "",
+    "chartVersion": "8",
+    "allowTableDrill": true,
+    "modified": null,
+    "dynamicTitle": {
+      "text": []
+    },
+    "dynamicDescription": {
+      "text": []
+    }
+  },
+  "dataProvider": {
+    "dataSourceId": "some_id"
+  }
+}
