@@ -8,7 +8,6 @@ import logging
 
 # === Notes ===
 # compatible for 1 to 1 & 1 to many reports only at the moment
-# need to set username and password from the csv
 # not compatible for many to many reports
 # rethink about the datasource if reference instances and while copying json reports
 # get data source(get_data_sets from domo_helper) and page id(check riley's video admin -> pages ) dynamically
@@ -51,15 +50,21 @@ def get_session_token(domo_instance, email, password):
     auth_headers = {'Content-Type': 'application/json'}
     auth_response = requests.post(auth_api, data=auth_body, headers=auth_headers)
     auth_status = auth_response.status_code
+    resp = auth_response.json()
     if auth_status == 200:
-        logging.info('Session token acquired.')
-        print(auth_response.json())
-        return auth_response.json()['sessionToken']
+        if (resp['success'] is False):
+            token_error_string = "Failed to login to the instance : {} ,  reason: {}".format(domo_instance,
+                                                                                             resp['reason'])
+            return None, token_error_string
+        else:
+            logging.info('Session token acquired.')
+            return resp['sessionToken']
     else:
         token_error_string = 'Token request ended up with status code {}'.format(auth_status)
         logging.error(token_error_string)
         logging.error(auth_response.text)
         raise Exception(token_error_string)
+        return None
 
 
 def update_with_new_value(report_json, key_name, value):
@@ -102,12 +107,13 @@ def generate_report_json(report_json):
 
 
 
-def generate_blank_report(instance_info, blank_json, pd_index):
+def generate_blank_report(instance_info, blank_json, pd_index, session_token):
     # ================== Manupulate blank Json =================
     # replace datasource id with the one in the csv
     blank_json['dataProvider']['dataSourceId'] = instance_info['datasource_id']
     blank_json['definition']['title'] = blank_json['definition']['title'] + "_from_script_0"
-    session_token = get_session_token(instance_info['instance_id'], username, password)
+
+
     cards_api = "https://{}.domo.com/api/content/v3/cards/kpi?newContainer=true&pageId={}".format(
         instance_info['instance_id'], instance_info['page_id'])
 
@@ -166,6 +172,9 @@ def publish_report():
 print(occ + " Start creating Json for Report/s  " + occ)
 reports_json_to_download = pd.read_csv(relative_path() + '/' + parent_report_csv)
 
+reports_json_to_download[['username']] = reports_json_to_download[['username']].fillna(value=username)
+reports_json_to_download[['password']] = reports_json_to_download[['password']].fillna(value=password)
+
 for index, report_json in reports_json_to_download.iterrows():
     generate_report_json(report_json)
 
@@ -175,7 +184,11 @@ print(occ + " Report/s Json Created! " + occ)
 # ================ Get info of instance/s where Report/s are to be published ===============
 print(occ + "Get info of instance/s where Report/s are to be published" + occ)
 publish_report_instances = pd.read_csv(relative_path() + '/' + instance_to_publish_csv)
+
 publish_report_instances[['card_id']] = publish_report_instances[['card_id']].fillna(value=0)
+publish_report_instances[['username']] = publish_report_instances[['username']].fillna(value=username)
+publish_report_instances[['password']] = publish_report_instances[['password']].fillna(value=password)
+
 publish_report_instances.astype({"card_id": 'int64'})
 print(occ + "Received info of instance/s where Report/s are to be published" + occ)
 
@@ -189,7 +202,12 @@ with open('blank_report.json') as f:
     blank_json = json.load(f)
 
 for index, instance_info in publish_report_instances.iterrows():
-    generate_blank_report(instance_info, blank_json, index)
+    session_token = get_session_token(instance_info['instance_id'], instance_info['username'], instance_info['password'])
+    if type(session_token) != str and session_token[0] is None:
+        logging.error(session_token[1])
+        continue
+
+    generate_blank_report(instance_info, blank_json, index, session_token)
 print(occ + "Done creating blank reports on the instance/s where Report/s are to be published" + occ)
 
 
