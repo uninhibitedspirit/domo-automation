@@ -107,7 +107,7 @@ def generate_report_json(report_json):
 
 
 
-def generate_blank_report(instance_info, blank_json, pd_index, session_token):
+def generate_blank_report_and_publish(instance_info, blank_json, pd_index, session_token, all_publish_report_instances):
     # ================== Manupulate blank Json =================
     # replace datasource id with the one in the csv
     blank_json['dataProvider']['dataSourceId'] = instance_info['datasource_id']
@@ -126,8 +126,13 @@ def generate_blank_report(instance_info, blank_json, pd_index, session_token):
         card_id = cards_details['id']
 
         # replace card_id value in publish_report_instances
-        publish_report_instances.loc[pd_index, 'card_id'] = card_id
+        all_publish_report_instances.loc[pd_index, 'card_id'] = card_id
         logging.info('Blank report successfully created id {}'.format(card_id))
+
+        # ================== Publish Parent instance reports to child instance =================
+        print(occ + "Publish reports to instance/s" + occ)
+        publish_report(instance_info)
+        print(occ + "Done publishing reports to instance/s" + occ)
     else:
         error = 'Card/Report creation PUT request ended up with status code {}'.format(cards_status)
         logging.error(error)
@@ -135,7 +140,7 @@ def generate_blank_report(instance_info, blank_json, pd_index, session_token):
         raise Exception(error)
 
 
-def publish_report():
+def publish_report(instance_info):
     project_dir = pathlib.Path(relative_path())
     publish_dir = project_dir / 'reports_to_be_published'
     for json_name in os.listdir(publish_dir.as_posix()):
@@ -145,27 +150,26 @@ def publish_report():
             with open(json_path) as f:
                 report_json = json.load(f)
 
-            for index, instance_info in publish_report_instances.iterrows():
-                # ================== Manipulate Json =================
-                # replace 'cardId' with the blank card/report id(int) we have created on the new instance
-                report_json['cardId'] = instance_info['card_id']
+            # ================== Manipulate Json =================
+            # replace 'cardId' with the blank card/report id(int) we have created on the new instance
+            report_json['cardId'] = instance_info['card_id']
 
-                # replace 'urn' with the blank card/report id(string) we have created on the new instance
-                report_json['urn'] = str(instance_info['card_id'])
+            # replace 'urn' with the blank card/report id(string) we have created on the new instance
+            report_json['urn'] = str(instance_info['card_id'])
 
-                # replace 'dataSourceId' key throughout the json
-                report_json_str = update_with_new_value(report_json, 'dataSourceId', instance_info['datasource_id'])
+            # replace 'dataSourceId' key throughout the json
+            report_json_str = update_with_new_value(report_json, 'dataSourceId', instance_info['datasource_id'])
 
-                # replace json_path file with the manipulated one
+            # replace json_path file with the manipulated one
 
-                with open(json_path, "w") as outfile:
-                    outfile.write(report_json_str)
+            with open(json_path, "w") as outfile:
+                outfile.write(report_json_str)
 
-                # refer the same json file again in the command_to_run
-                command_to_run = "connect -u {} -p {} -s {}.domo.com\nrestore-card -i {} -f '{}'\nquit".format(
-                    username, password, instance_info['instance_id'], instance_info['page_id'], json_path.as_posix())
-                # # !!!!!CAUTION!!!!
-                subprocess.run(["java", "-jar", "domoUtil.jar"], input=bytes(command_to_run, 'utf-8'))
+            # refer the same json file again in the command_to_run
+            command_to_run = "connect -u {} -p {} -s {}.domo.com\nrestore-card -i {} -f '{}'\nquit".format(
+                username, password, instance_info['instance_id'], instance_info['page_id'], json_path.as_posix())
+            # # !!!!!CAUTION!!!!
+            subprocess.run(["java", "-jar", "domoUtil.jar"], input=bytes(command_to_run, 'utf-8'))
 
 # ======================================================================================================================
 
@@ -192,26 +196,32 @@ publish_report_instances[['password']] = publish_report_instances[['password']].
 publish_report_instances.astype({"card_id": 'int64'})
 print(occ + "Received info of instance/s where Report/s are to be published" + occ)
 
+# ================== Create blank report of each parent reports for all the child instances =============
+
+for index, report_json in reports_json_to_download.iterrows():
+
+    all_publish_report_instances = publish_report_instances.copy()
+    # ================== Create blank report =============
+    # create a blank report(can be automated) with the same dataset
+    print(occ + "Generate a blank report to instance/s where Report/s are to be published" + occ)
+
+    with open('blank_report.json') as f:
+        blank_json = json.load(f)
+
+    for index, instance_info in all_publish_report_instances.iterrows():
+        session_token = get_session_token(instance_info['instance_id'], instance_info['username'],
+                                          instance_info['password'])
+        if type(session_token) != str and session_token[0] is None:
+            logging.error(session_token[1])
+            continue
+
+        generate_blank_report_and_publish(instance_info, blank_json, index, session_token, all_publish_report_instances)
+    print(occ + "Done creating blank reports on the instance/s where Report/s are to be published" + occ)
 
 
-# ================== Create blank report =============
-# create a blank report(can be automated) with the same dataset
-print(occ + "Generate a blank report to instance/s where Report/s are to be published" + occ)
-
-with open('blank_report.json') as f:
-    blank_json = json.load(f)
-
-for index, instance_info in publish_report_instances.iterrows():
-    session_token = get_session_token(instance_info['instance_id'], instance_info['username'], instance_info['password'])
-    if type(session_token) != str and session_token[0] is None:
-        logging.error(session_token[1])
-        continue
-
-    generate_blank_report(instance_info, blank_json, index, session_token)
-print(occ + "Done creating blank reports on the instance/s where Report/s are to be published" + occ)
+# ====================================
 
 
-# ================== Publish Parent instance reports to child instance =================
-print(occ + "Publish reports to instance/s" + occ)
-publish_report()
-print(occ + "Done publishing reports to instance/s" + occ)
+
+
+
