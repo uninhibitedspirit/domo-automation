@@ -3,7 +3,8 @@ import os
 import pathlib
 import subprocess
 import json
-
+from common import helper
+from datetime import datetime
 # === Notes ===
 # compatible for many to many reports only if all the parent instances datasets are the same
 # get data source(get_data_sets from domo_helper) and page id(check riley's video admin -> pages ) dynamically
@@ -15,10 +16,12 @@ import json
 username = "** some user email **"
 password = "** some password **"
 parent_report_csv = "parent_reports_to_be_published.csv"
-instance_to_publish_csv = "list_of_instances_to_publish_reports.csv"
+instance_to_publish_csv = "prod_list_of_instances_to_publish_reports.csv"
 occ = "=" * 30
 publish_report_instances = None
 reports_json_to_download = None
+list_of_all_inst_ds = {}
+match_strs = ['Content', 'Latest Metadata','[C][1]']
 # ==== global vars
 
 
@@ -77,7 +80,12 @@ def publish_report(instance_info, json_name):
     report_json['urn'] = str(instance_info['card_id'])
 
     # replace 'dataSourceId' key throughout the json
-    report_json_str = update_with_new_value(report_json, 'dataSourceId', instance_info['datasource_id'])
+    if 'datasource_id' not in publish_report_instances.columns:
+        dataset_id = list_of_all_inst_ds[instance_info['instance_id']]['id']
+    else:
+        dataset_id = instance_info['datasource_id']
+
+    report_json_str = update_with_new_value(report_json, 'dataSourceId', dataset_id)
 
     # replace json_path file with the manipulated one
 
@@ -92,6 +100,7 @@ def publish_report(instance_info, json_name):
     subprocess.run(["java", "-jar", "domoUtil.jar"], input=bytes(command_to_run, 'utf-8'))
 
 # ======================================================================================================================
+print(occ,"Starting script now == ", datetime.now().strftime("%d-%b-%Y %H:%M:%S"), occ)
 
 reports_json_to_download = pd.read_csv(relative_path() + '/' + parent_report_csv)
 
@@ -110,6 +119,19 @@ publish_report_instances[['password']] = publish_report_instances[['password']].
 publish_report_instances.astype({"card_id": 'int64'})
 print(occ + "Received info of instance/s where Report/s are to be published" + occ)
 
+# ================== Please note that all the reports should be of the same datasets =============
+
+if('datasource_id' not in publish_report_instances.columns):
+    print(occ + " fetching all the datasource ids from dataflows " + occ)
+    for index, instance_info in publish_report_instances.iterrows():
+        session = helper.get_session_token(instance_info['instance_id'],
+                                           instance_info['username'],
+                                           instance_info['password'])
+
+        ds_list = helper.get_all_df_details(instance_info['instance_id'], session, instance_info['dataflow_id'], match_strs)
+
+        list_of_all_inst_ds[instance_info['instance_id']] = ds_list[0]
+    print(occ + " Done fetching all the datasource ids from dataflows " + occ)
 # ================== Create blank report of each parent reports for all the child instances =============
 
 for parent_index, report_json in reports_json_to_download.iterrows():
@@ -118,16 +140,13 @@ for parent_index, report_json in reports_json_to_download.iterrows():
     generate_report_json(report_json)
     print(occ + " Report/s Json Created! " + occ)
 
-    all_publish_report_instances = publish_report_instances.copy()
-
-    for index, instance_info in all_publish_report_instances.iterrows():
+    for index, instance_info in publish_report_instances.iterrows():
+        print(occ + "Creating {} report for the instance {}".format(
+            report_json['json_name'].strip('.json'), instance_info['instance_id']) + occ)
         publish_report(instance_info, report_json['json_name'])
+        print(occ + "Done creating {} report for the instance {}".format(
+            report_json['json_name'].strip('.json'), instance_info['instance_id']) + occ)
     print(occ + "Done creating report: {} on all given instances".format(report_json['json_name'].strip('.json')) + occ)
 
-
+print(occ,"Ended script now == ", datetime.now().strftime("%d-%b-%Y %H:%M:%S"), occ)
 # ====================================
-
-
-
-
-
