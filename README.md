@@ -14,5 +14,5 @@ Requires following libraries:
 Requires domo cli in publish_reports directory, download <a title="https://app.domo.com/labs/java-sdk/latest/domoUtil.jar" href="https://app.domo.com/labs/java-sdk/latest/domoUtil.jar">here</a>
 
 How to install
-1. goto the directory where this repository is closed
+1. goto the directory where this repository is cloned
 2. Run `pip install --editable domo-automation`
