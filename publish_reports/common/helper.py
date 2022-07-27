@@ -162,3 +162,228 @@ def get_exact_dataset(ds, match_strs, exclude_str, key_name):
             should_include = np.logical_and(should_include, False)
 
     return should_include
+
+
+def get_all_users(instance_id, session_token, offset, filter=[]):
+
+    payload = {"showCount":True,
+               "count":False,
+               "includeDeleted":False,
+               "includeSupport":False,
+               "limit":200,
+               "offset":offset,
+               "sort":{"field":"displayName","order":"ASC"},
+               "filters": filter,
+               "attributes":["id","roleId","department","title","employeeId","employeeNumber","created","lastActivity","displayName"]}
+
+    list_DF_API = "https://{}.domo.com/api/identity/v1/users/search".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.post(url=list_DF_API, data=json.dumps(payload), headers=cards_headers)
+    cards_status = df_response.status_code
+    if cards_status == 200:
+        j_ref = json.loads(df_response.text)
+        return [{'name': i['displayName'], 'id': i['id'], 'email': i['emailAddress']} for i in j_ref['users']]
+        logging.info('Successfully fetched all the dataflows')
+    else:
+        error = "There was error in fetching users from instance id: '{}' with status code:{}".format(instance_id,cards_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+
+
+def change_password(instance_id, session_token, domoUserId, password, name, email):
+    payload = {"domoUserId": domoUserId, "password": password}
+
+    list_DF_API = "https://{}.domo.com/api/identity/v1/password".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.put(url=list_DF_API, data=json.dumps(payload), headers=cards_headers)
+    cards_status = df_response.status_code
+
+    if cards_status == 200:
+        j_ref = json.loads(df_response.text)
+        if(j_ref['success']):
+            msg = "Successfully changed the password instance id: '{}' for user_id: {}, name: {}, email: {}".format(
+                instance_id, domoUserId, name, email)
+            print(msg)
+            logging.info(msg)
+        else:
+            error = j_ref['description'] + " instance id: '{}' for user_id: {}, name: {}, email: {}".format(
+                instance_id, domoUserId, name, email)
+            logging.error(error)
+            print(error)
+    else:
+        error = "There was error changing dataflows from instance id: '{}' for user: {}, email: {} with status code:{}".format(instance_id,domoUserId,email,cards_status)
+        logging.error(error)
+        print(error)
+        logging.error(df_response.text)
+
+def add_user(instance_id, session_token, new_user):
+
+    list_DF_API = "https://{}.domo.com/api/content/v3/users".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.post(url=list_DF_API, data=json.dumps(new_user), headers=cards_headers)
+    cards_status = df_response.status_code
+    j_ref = json.loads(df_response.text)
+    if cards_status == 200:
+        j_ref = json.loads(df_response.text)
+        msg = "{} with emai: '{}' has been successfully added to the instance id: '{}' as '{}'".format(
+            new_user['displayName'], new_user["detail"]["email"],instance_id, j_ref['role'])
+        print(msg)
+        logging.info(msg)
+    else:
+        error = j_ref.get('EMAIL_DUPLICATE', 'Issue adding user!') + " instance id: '{}', name: '{}', role: {}, email: {}".format(
+            instance_id, new_user['displayName'], new_user["roleId"], new_user["detail"]["email"])
+        logging.error(error)
+        print(error)
+        logging.error(df_response.text)
+
+def delete_user(instance_id, session_token, user_details):
+    list_DF_API = "https://{}.domo.com/api/identity/v1/users/{}".format(instance_id, user_details['id'])
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+
+    df_response = requests.delete(url=list_DF_API, headers=cards_headers)
+    cards_status = df_response.status_code
+    print("{} - {} - {} : card status {} - instance:{}".format(user_details['id'], user_details['email'], user_details['name'], cards_status, instance_id))
+    print('df_response.text = ', df_response.text)
+    print('df_response.status_code = ', df_response.status_code)
+    print('df_response.url = ', df_response.url)
+    print('df_response.encoding = ', df_response.encoding)
+    print('df_response.content = ', df_response.content)
+    if cards_status == 200:
+        resp = df_response.json() if df_response.text!='' else {}
+        print('resp = ', resp)
+
+        token_error_string = 'User deleted successfully! name: {}, id: {}, email:{}'.format(user_details['name'], user_details['id'], user_details['email'])
+        logging.info(token_error_string)
+        if resp.get('success', True) is False:
+            token_error_string = 'name: {}, id: {}, email:{}'.format(user_details.name, user_details.id, user_details.email)
+            return (None, token_error_string)
+        else:
+            logging.info(token_error_string)
+            return token_error_string
+    else:
+        error = "There was error in deleting name: {}, id: {}, email:{} with status code:{} from instance:{}".format(
+            user_details['name'], user_details['id'], user_details['email'], cards_status, instance_id)
+        logging.error(error)
+        logging.error(df_response.text)
+        return error
+        # raise Exception(error)
+
+
+def get_cards_list(instance_id, session_token, payload, limit=100, skip=0):
+    API_URL = "https://{}.domo.com/api/content/v2/cards/adminsummary?limit={}&skip={}".format(instance_id, limit, skip)
+
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+
+    df_response = requests.post(url=API_URL, data=json.dumps(payload), headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        return j_ref
+        logging.info('Successfully fetched users')
+    else:
+        error = "There was error in fetching cards from instance id: '{}' with status code:{} limit: {}, skip: {}".format(instance_id,status, limit, skip)
+        logging.error(error)
+        logging.error(df_response.text)
+        # raise Exception(error)
+
+
+
+def get_users(instance_id, session_token, payload):
+    API_URL = "https://{}.domo.com/api/identity/v1/users/search".format(instance_id)
+
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+
+    df_response = requests.post(url=API_URL, data=json.dumps(payload), headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        return j_ref
+        logging.info('Successfully fetched users')
+    else:
+        error = "There was error in fetching users from instance id: '{}' with status code:{}".format(instance_id,status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+
+def get_card_details(instance_id, session_token, query):
+    API_URL = "https://{}.domo.com/api/content/v1/cards?{}".format(instance_id,query)
+
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+
+    df_response = requests.get(url=API_URL, headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        return j_ref
+        logging.info('Successfully fetched users')
+    else:
+        error = "There was error in fetching users from instance id: '{}' with status code:{}".format(instance_id,status)
+        logging.error(error)
+        logging.error(df_response.text)
+
+def fetch_datasets(instance_id, session_token, payload):
+    list_DF_API = "https://{}.domo.com/api/data/ui/v3/datasources/search".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.post(url=list_DF_API, data=json.dumps(payload), headers=cards_headers)
+    cards_status = df_response.status_code
+    if cards_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the dataflows')
+        return j_ref
+    else:
+        error = "There was error in fetching dataflows from instance id: '{}' with status code:{}".format(instance_id,
+                                                                                                          cards_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []
+
+def each_datasets_cards(instance_id, session_token, dataset_id):
+    API_URL = "https://{}.domo.com/api/content/v1/datasources/{}/cards?drill=true".format(instance_id,dataset_id)
+
+    headers = {'Content-Type': 'application/json',
+               'x-domo-authentication': session_token}
+
+    df_response = requests.get(url=API_URL, headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched cards info')
+        return j_ref
+    else:
+        error = "There was error in fetching cards info of dataset:{} from instance id: '{}' with status code:{}".format(
+        dataset_id, instance_id, status)
+        logging.error(error)
+        logging.error(df_response.text)
+
+def get_cards_users(instance_id, session_token, query):
+    API_URL = "https://{}.domo.com/api/content/v3/users?{}".format(instance_id, query)
+
+    headers = {'Content-Type': 'application/json',
+               'x-domo-authentication': session_token}
+
+    df_response = requests.get(url=API_URL, headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched card users info')
+        return j_ref
+    else:
+        error = "There was error in fetching card users from instance id: '{}' with status code:{}".format(
+        instance_id, status)
+        logging.error(error)
+        logging.error(df_response.text)
