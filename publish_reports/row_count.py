@@ -102,6 +102,6 @@ for i, instance in instance_info.iterrows():
     row_record = pd.Series(obj)
     export_data = pd.DataFrame()
     export_data = export_data.append(row_record,ignore_index=True,sort=False)
-    export_data.dataSetCount = export_data.dataSetCount.astype('int32')
-    export_data.dataSetRowCount = export_data.dataSetRowCount.astype('int32')
+    export_data.dataSetCount = export_data.dataSetCount.astype('int64')
+    export_data.dataSetRowCount = export_data.dataSetRowCount.astype('int64')
     export_data.to_csv(export_csv_ref, mode='a', index=False, header=False)
