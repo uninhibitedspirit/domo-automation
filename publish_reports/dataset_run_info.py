@@ -1,21 +1,20 @@
 import pandas as pd
 import numpy as np
 import os
-import pathlib
-import subprocess
 import json
 from common import helper
 from datetime import datetime, timedelta
 import requests
 from functools import reduce
 import logging
+import csv
+import math
 
 
 # ==== global vars
 username = ""
 password = ""
 instances_ref = "instance_credentials.csv"
-export_csv_ref = 'status_last_run_datasets.csv'
 export_manual_csv_ref = 'manual_dataflows.csv'
 export_data = pd.DataFrame()
 no_dataset = 30
@@ -59,6 +58,7 @@ def get_all_dataflows_id(instance_id, session_token, **queryparams):
             lastrunmil = queryparams.get(arg, lastrunmil)
             lastrunmil = datetime.now() - timedelta(days=int(lastrunmil))
             lastrunmil = lastrunmil.timestamp() * 1000
+            lastrunmil = math.floor(lastrunmil)
 
     payload = {"entities": entities,
                "filters": [
@@ -79,7 +79,7 @@ def get_all_dataflows_id(instance_id, session_token, **queryparams):
     cards_status = df_response.status_code
     if cards_status == 200:
         j_ref = json.loads(df_response.text)
-        df_list = [i['databaseId'] for i in j_ref['searchObjects']]
+        df_list = {i['databaseId']: {'ownedById': i['ownedById'], 'ownedByName': i['ownedByName']} for i in j_ref['searchObjects']}
         return df_list
         logging.info('Successfully fetched all the dataflows')
     else:
@@ -110,8 +110,7 @@ def fetch_each_dataflows(instance_id, session_token, dataflow_id):
                     'failed': j_ref['lastExecution'].get('failed', None),
                     'isManual': isManual,
                     'id': j_ref['id']}
-        sr = pd.Series(ds_list)
-        return sr
+        return ds_list
     else:
         error = "There was error in fetching dataflows from instance id: '{}' with status code:{}".format(instance_id,
                                                                                                           cards_status)
@@ -120,18 +119,37 @@ def fetch_each_dataflows(instance_id, session_token, dataflow_id):
         raise Exception(error)
         return []
 
-def fetch_all_dataflows(instance_id, session_token):
+def fetch_all_dataflows(instance_id, session_token,last_run):
     offset=0
     loop_bool = True
-    inst_df_id[instance_id] = []
+    inst_df_id[instance_id] = {}
     while loop_bool:
-        df_list = get_all_dataflows_id(instance_id, session_token, count=no_dataset, offset=offset)
-        inst_df_id[instance_id].extend(df_list)
+        df_list = get_all_dataflows_id(instance_id, session_token, count=no_dataset, offset=offset, lastrunmil=last_run)
+        inst_df_id[instance_id].update(df_list)
         offset +=no_dataset
         loop_bool = not(len(df_list) < no_dataset)
 
 
 # ===================== common =======================
+
+# ====init
+headerList = [
+            'instace_name',
+            'name',
+            'lastUpdated',
+            'state',
+            'failed',
+            'isManual',
+            'owner_id',
+            'owner_name',
+            'id']
+headerList.sort()
+
+with open(export_manual_csv_ref, 'wt', newline ='') as file:
+    writer = csv.writer(file, delimiter=',')
+    writer.writerow(i for i in headerList)
+# ====
+
 
 
 # ======================================================================================================================
@@ -155,30 +173,31 @@ for i, instance in instance_info.iterrows():
         continue
 
     # fetch all the datasets
-    fetch_all_dataflows(instance['instance_id'], session)
-    inst_df_ids = inst_df_id[instance['instance_id']]
+    last_run_date = datetime.now() - timedelta(days=int(3))
+    last_run_date = last_run_date.timestamp() * 1000
+    last_run_date = pd.to_datetime(last_run_date, unit='ms')
+    fetch_all_dataflows(instance['instance_id'], session,3)
+    inst_ref = inst_df_id[instance['instance_id']]
+    inst_df_ids = inst_ref.keys()
     for i in inst_df_ids:
         s = fetch_each_dataflows(instance['instance_id'], session, i)
-        if s.isManual:
-            export_data = export_data.append(s,ignore_index=True)
-        # print(export_data.head())
-        # print(export_data.info())
-
-# export csv for all manual df
-export_data.isManual = export_data.isManual.astype('bool')
-export_data.failed = export_data.failed.astype('bool')
-export_data.id = export_data.id.astype('int32')
-
-# export_data_for_manual = export_data[export_data.isManual == True]
-# export_data_for_manual = export_data_for_manual.drop(['isManual'], axis=1)
-export_data_for_manual.to_csv(export_manual_csv_ref, index=False)
-
-# export csv for all the dataflows not run for 3 days
-last_run_date = datetime.now() - timedelta(days=int(3))
-last_run_date = last_run_date.timestamp() * 1000
-last_run_date = pd.to_datetime(last_run_date, unit='ms')
-
-print('before export_data.shape == ', export_data.shape)
-export_data = export_data[export_data.lastUpdated < last_run_date]
-print('after export_data.shape == ', export_data.shape)
-export_data.to_csv(export_csv_ref, index=False)
+        owner_id = inst_ref[i]['ownedById']
+        owner_name = inst_ref[i]['ownedByName']
+        card_obj = {
+            'instace_name': s['instace_name'],
+            'name': s['name'],
+            'lastUpdated': s['lastUpdated'],
+            'state': s['state'],
+            'failed': s['failed'],
+            'isManual': s['isManual'],
+            'id': s['id'],
+            'owner_id' : owner_id,
+            'owner_name': owner_name
+        }
+        card_record = pd.Series(card_obj)
+        export_data = pd.DataFrame()
+        export_data = export_data.append(card_record,ignore_index=True,sort=False)
+        export_data.isManual = export_data.isManual.astype('bool')
+        export_data.failed = export_data.failed.astype('bool')
+        export_data.id = export_data.id.astype('int64')
+        export_data.to_csv(export_manual_csv_ref, mode='a', index=False, header=False)
