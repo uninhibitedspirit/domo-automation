@@ -4,7 +4,7 @@ import requests
 import numpy as np
 
 
-def get_session_token(domo_instance, email, password):
+def get_session_token(domo_instance, email, password, full_response=False):
     auth_api = 'https://{}.domo.com/api/content/v2/authentication'.format(domo_instance)
     auth_body = json.dumps({
         "method": "password",
@@ -22,7 +22,10 @@ def get_session_token(domo_instance, email, password):
             return (None, token_error_string)
         else:
             logging.info('Session token acquired.')
-            return resp['sessionToken']
+            if full_response:
+                return resp
+            else:
+                return resp['sessionToken']
     else:
         token_error_string = 'Token request ended up with status code {}'.format(auth_status)
         logging.error(token_error_string)
@@ -380,10 +383,86 @@ def get_cards_users(instance_id, session_token, query):
     status = df_response.status_code
     if status == 200:
         j_ref = json.loads(df_response.text)
-        logging.info('Successfully fetched card users info')
+        logging.info('Successfully fetched cards info')
         return j_ref
     else:
-        error = "There was error in fetching card users from instance id: '{}' with status code:{}".format(
-        instance_id, status)
+        error = "There was error in fetching cards info of dataset:{} from instance id: '{}' with status code:{}".format(
+        dataset_id, instance_id, status)
         logging.error(error)
         logging.error(df_response.text)
+
+def get_roles(instance_id, session_token):
+    API_URL = "https://{}.domo.com/api/authorization/v1/roles".format(instance_id)
+
+    headers = {'Content-Type': 'application/json',
+               'x-domo-authentication': session_token}
+
+    df_response = requests.get(url=API_URL, headers=headers)
+    status = df_response.status_code
+    if status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched cards info')
+        return j_ref
+    else:
+        error = "There was error in fetching cards info of dataset:{} from instance id: '{}' with status code:{}".format(
+        dataset_id, instance_id, status)
+        logging.error(error)
+        logging.error(df_response.text)
+
+def add_to_group(instance_id, session_token, group_id, user_id, email):
+    payload = [{"groupId":group_id,"addMembers":[{"type":"USER","id":user_id}]}]
+
+    list_DF_API = "https://{}.domo.com/api/content/v2/groups/access".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.put(url=list_DF_API, data=json.dumps(payload), headers=cards_headers)
+    cards_status = df_response.status_code
+
+    if cards_status == 200:
+        msg = "Successfully added email: '{}' for user_id: {} to group_id: {} for instance:'{}'".format(
+            email, user_id, group_id, instance_id)
+        # print(msg)
+        # logging.info(msg)
+    else:
+        error = "There was error adding user from instance id: '{}' to group_id: '{}', user_id: {}, email: {} with status code:{}".format(instance_id, group_id, user_id, email, cards_status)
+        logging.error(error)
+        print(error)
+        # logging.error(df_response.text)
+
+def get_dataflows(instance_id, session_token, payload):
+    list_DF_API = "https://{}.domo.com/api/search/v1/query".format(instance_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.post(url=list_DF_API, data=json.dumps(payload), headers=cards_headers)
+    resp_status = df_response.status_code
+    if resp_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the dataflows')
+        return j_ref
+    else:
+        error = "There was error in fetching dataflows from instance id: '{}' with status code:{}".format(instance_id,
+                                                                                                          resp_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []
+
+def export_dataset(instance_id, session_token, payload, dataset_id):
+    list_DF_API = "https://{}.domo.com/api/query/v1/execute/{}".format(instance_id, dataset_id)
+
+    cards_headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.post(url=list_DF_API,  data=json.dumps(payload),headers=cards_headers)
+    resp_status = df_response.status_code
+    if resp_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the dataflows')
+        return j_ref
+    else:
+        error = "There was error in downloading csv instance id: '{}' with status code:{}".format(instance_id, resp_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []

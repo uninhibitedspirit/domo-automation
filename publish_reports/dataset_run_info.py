@@ -14,7 +14,7 @@ import math
 # ==== global vars
 username = ""
 password = ""
-instances_ref = "instance_credentials.csv"
+instances_ref = "inst_client_creds.csv"
 export_manual_csv_ref = 'manual_dataflows.csv'
 export_data = pd.DataFrame()
 no_dataset = 30
@@ -132,22 +132,19 @@ def fetch_all_dataflows(instance_id, session_token,last_run):
 
 # ===================== common =======================
 
-# ====init
-headerList = [
-            'instace_name',
-            'name',
-            'lastUpdated',
-            'state',
-            'failed',
-            'isManual',
-            'owner_id',
-            'owner_name',
-            'id']
-headerList.sort()
+cols = [
+        'instace_name',
+        'name',
+        'lastUpdated',
+        'state',
+        'failed',
+        'isManual',
+        'owner_id',
+        'owner_name',
+        'id']
+df = pd.DataFrame(columns=cols)
 
-with open(export_manual_csv_ref, 'wt', newline ='') as file:
-    writer = csv.writer(file, delimiter=',')
-    writer.writerow(i for i in headerList)
+df.to_csv(export_manual_csv_ref, index=False, quoting=csv.QUOTE_NONE)
 # ====
 
 
@@ -183,6 +180,7 @@ for i, instance in instance_info.iterrows():
         s = fetch_each_dataflows(instance['instance_id'], session, i)
         owner_id = inst_ref[i]['ownedById']
         owner_name = inst_ref[i]['ownedByName']
+
         card_obj = {
             'instace_name': s['instace_name'],
             'name': s['name'],
@@ -190,13 +188,12 @@ for i, instance in instance_info.iterrows():
             'state': s['state'],
             'failed': s['failed'],
             'isManual': s['isManual'],
-            'id': s['id'],
             'owner_id' : owner_id,
-            'owner_name': owner_name
+            'owner_name': owner_name,
+            'id': s['id']
         }
         card_record = pd.Series(card_obj)
-        export_data = pd.DataFrame()
-        export_data = export_data.append(card_record,ignore_index=True,sort=False)
+        export_data = pd.DataFrame([card_obj])
         export_data.isManual = export_data.isManual.astype('bool')
         export_data.failed = export_data.failed.astype('bool')
         export_data.id = export_data.id.astype('int64')

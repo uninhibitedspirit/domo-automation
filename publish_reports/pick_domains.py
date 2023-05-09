@@ -9,6 +9,7 @@ import logging
 from common import helper
 from datetime import datetime
 import re
+import csv
 
 
 
@@ -42,36 +43,40 @@ def fetch_all_emails(instance, session, client, dataset_id, ds_name, owner):
   dataset_offset=0
   loop_bool = True
   while loop_bool:
-    dataset_payload = {"querySource":"judoTable","useCache":True,
-    "query":{"columns":[{"exprType":"COLUMN","column":"Email"}],
+
+    dataset_payload = {"querySource":"data_table","useCache":True,
+    "query":{
+      "columns":[{"exprType":"COLUMN","column":"Email"}],
       "limit":{"limit": dataset_limit,"offset": dataset_offset},
-      "orderByColumns":[],"groupByColumns":[],"where":None,"having":None},
-    "context":{"calendar":"StandardCalendar",
-    "features":{"PerformTimeZoneConversion":True,"AllowNullValues":True,"TreatNumbersAsStrings":True}},
-    "viewTemplate":None}
+      "orderByColumns":[],"groupByColumns":[],
+      "where":{"not":False,"exprType":"IN",
+              "leftExpr":{"exprType":"COLUMN","column":"User Account Status"},
+              "selectSet":[{"exprType":"STRING_VALUE","value":"active"}]},
+              "having":None},
+      "context":{"calendar":"StandardCalendar",
+      "features":{"PerformTimeZoneConversion":True,"AllowNullValues":True,"TreatNumbersAsStrings":True}},"viewTemplate":None}
 
     df_list = helper.export_dataset(instance, session, dataset_payload, dataset_id)
-    emails = [a[0] for a in df_list['rows']]
-    print('===============================emails===================== ',)
-    # [print(i) for i in emails if i !='']
-    domains = {i[i.index('@') + 1 : ] for i in emails if i !='' and i!=None}
-      
+
     data = [{
-      'domain': i,
-      'ds_name': ds_name,
-      'client': client, 
-      'instance_id': instance,
-      'owner_id': owner.get('id'),
-      'owner_name': owner.get('name')
-    } for i in domains]
-    
-      # Creates DataFrame.
-      
+              'domain': a[0][a[0].index('@') + 1 : ],
+              'ds_name': ds_name,
+              'client': client,
+              'instance_id': instance,
+              'owner_id': owner.get('id'),
+              'owner_name': owner.get('name')
+            }
+            for a in df_list['rows']
+              if a[0] !='' and a[0]!=None ]
+    print('===============================emails===================== ',)
+    # Creates DataFrame.
+
     export_data = pd.DataFrame(data)
+    print("instance={} , client={}, dataset_id={}, ds_name={}, owner={}".format(instance, client, dataset_id, ds_name, owner))
     export_data.to_csv(export_csv_ref, mode='a', index=False, header=False)
     
     dataset_offset +=dataset_limit
-    loop_bool = not(len(emails) < dataset_limit)
+    loop_bool = not(df_list['numRows'] < dataset_limit)
   
   def find_std(n, is_bool=False):
     ns = re.sub(r"^\d+", "", n) # removed all the number from the begining
@@ -132,7 +137,7 @@ cols = [
       ]
 df = pd.DataFrame(columns=cols)
 
-df.to_csv(export_csv_ref, index=False, line_terminator='\n')
+df.to_csv(export_csv_ref, index=False, quoting=csv.QUOTE_NONE)
 
 for i, instance in instance_info.iterrows():
   # login to the instance and get the token from helper.get_session_token
