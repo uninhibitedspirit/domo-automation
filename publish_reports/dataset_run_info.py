@@ -9,12 +9,16 @@ from functools import reduce
 import logging
 import csv
 import math
+import psutil #this is to track CPU useage
+
+p = psutil.Process(os.getpid())
+print("Start of the script memory == ", p.memory_info())
 
 
 # ==== global vars
 username = ""
 password = ""
-instances_ref = "instance_credentials.csv"
+instances_ref = "inst_client_creds.csv"
 export_manual_csv_ref = 'manual_dataflows.csv'
 export_data = pd.DataFrame()
 no_dataset = 30
@@ -133,21 +137,21 @@ def fetch_all_dataflows(instance_id, session_token,last_run):
 # ===================== common =======================
 
 # ====init
-headerList = [
-            'instace_name',
-            'name',
-            'lastUpdated',
-            'state',
-            'failed',
-            'isManual',
-            'owner_id',
-            'owner_name',
-            'id']
-headerList.sort()
+# headerList = [
+#             'instace_name',
+#             'name',
+#             'lastUpdated',
+#             'state',
+#             'failed',
+#             'isManual',
+#             'owner_id',
+#             'owner_name',
+#             'id']
+# headerList.sort()
 
-with open(export_manual_csv_ref, 'wt', newline ='') as file:
-    writer = csv.writer(file, delimiter=',')
-    writer.writerow(i for i in headerList)
+# with open(export_manual_csv_ref, 'wt', newline ='') as file:
+#     writer = csv.writer(file, delimiter=',')
+#     writer.writerow(i for i in headerList)
 # ====
 
 
@@ -155,14 +159,18 @@ with open(export_manual_csv_ref, 'wt', newline ='') as file:
 # ======================================================================================================================
 print(occ,"Starting script now == ", datetime.now().strftime("%d-%b-%Y %H:%M:%S"), occ)
 
+
 instance_info = pd.read_csv(relative_path() + '/' + instances_ref)
 
 instance_info[['username']] = instance_info[['username']].fillna(value=username)
 instance_info[['password']] = instance_info[['password']].fillna(value=password)
-
+print("p.memory_info() = ", p.memory_info())
 
 for i, instance in instance_info.iterrows():
     # login to the instance and get the token from helper.get_session_token
+    print("Memory after exporting")
+    print("CPU percent = ",p.memory_info())
+    print("p.memory_info() = ", p.memory_info())
     session = helper.get_session_token(instance['instance_id'],
                                        instance['username'],
                                        instance['password'])
@@ -180,6 +188,8 @@ for i, instance in instance_info.iterrows():
     inst_ref = inst_df_id[instance['instance_id']]
     inst_df_ids = inst_ref.keys()
     for i in inst_df_ids:
+        print("Memory before looping over instance")
+        print("CPU percent = ",p.memory_info())
         s = fetch_each_dataflows(instance['instance_id'], session, i)
         owner_id = inst_ref[i]['ownedById']
         owner_name = inst_ref[i]['ownedByName']
@@ -201,3 +211,5 @@ for i, instance in instance_info.iterrows():
         export_data.failed = export_data.failed.astype('bool')
         export_data.id = export_data.id.astype('int64')
         export_data.to_csv(export_manual_csv_ref, mode='a', index=False, header=False)
+        print("Memory after exporting")
+        print("CPU percent = ",p.memory_info())
