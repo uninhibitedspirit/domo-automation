@@ -99,9 +99,10 @@ for i, instance in instance_info.iterrows():
         'dataSetCount': row_det['dataSetCount'],
         'dataSetRowCount': row_det['dataSetRowCount'],
     }
-    row_record = pd.Series(obj)
-    export_data = pd.DataFrame()
-    export_data = export_data.append(row_record,ignore_index=True,sort=False)
+    # row_record = pd.Series(obj)
+    # export_data = pd.DataFrame()
+    # export_data = export_data.append(row_record,ignore_index=True,sort=False)
+    export_data = pd.concat([pd.DataFrame([obj])], ignore_index=True)
     export_data.dataSetCount = export_data.dataSetCount.astype('int64')
     export_data.dataSetRowCount = export_data.dataSetRowCount.astype('int64')
     export_data.to_csv(export_csv_ref, mode='a', index=False, header=False)

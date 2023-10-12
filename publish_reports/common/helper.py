@@ -28,10 +28,12 @@ def get_session_token(domo_instance, email, password, full_response=False):
                 return resp['sessionToken']
     else:
         token_error_string = 'Token request ended up with status code {}'.format(auth_status)
-        logging.error(token_error_string)
-        logging.error(auth_response.text)
-        raise Exception(token_error_string)
-        return None
+        # logging.error(token_error_string)
+        # logging.error(auth_response.text)
+        # raise Exception(token_error_string)
+        # print(token_error_string)
+        # print(auth_response.text)
+        return (None, token_error_string)
 
 
 def get_all_dataflows(instance_id, session_token, **queryparams):
@@ -455,6 +457,42 @@ def export_dataset(instance_id, session_token, payload, dataset_id):
     cards_headers = {'Content-Type': 'application/json',
                      'x-domo-authentication': session_token}
     df_response = requests.post(url=list_DF_API,  data=json.dumps(payload),headers=cards_headers)
+    resp_status = df_response.status_code
+    if resp_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the dataflows')
+        return j_ref
+    else:
+        error = "There was error in downloading csv instance id: '{}' with status code:{}".format(instance_id, resp_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []
+
+def get_pdp_details(instance_id, session_token, payload, dataset_id):
+    list_DF_API = "https://{}.domo.com/api/query/v1/data-control/{}/filter-groups?{}".format(instance_id, dataset_id,payload)
+    
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.get(url=list_DF_API, headers=headers)
+    resp_status = df_response.status_code
+    if resp_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the dataflows')
+        return j_ref
+    else:
+        error = "There was error in downloading csv instance id: '{}' with status code:{}".format(instance_id, resp_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []
+
+def get_users_with_id(instance_id, session_token, payload):
+    list_DF_API = "https://{}.domo.com/users/index?{}".format(instance_id,payload)
+    
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.get(url=list_DF_API, headers=headers)
     resp_status = df_response.status_code
     if resp_status == 200:
         j_ref = json.loads(df_response.text)
