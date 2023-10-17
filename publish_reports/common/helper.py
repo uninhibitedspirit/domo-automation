@@ -471,7 +471,6 @@ def export_dataset(instance_id, session_token, payload, dataset_id):
 
 def get_pdp_details(instance_id, session_token, payload, dataset_id):
     list_DF_API = "https://{}.domo.com/api/query/v1/data-control/{}/filter-groups?{}".format(instance_id, dataset_id,payload)
-    
     headers = {'Content-Type': 'application/json',
                      'x-domo-authentication': session_token}
     df_response = requests.get(url=list_DF_API, headers=headers)
@@ -500,6 +499,24 @@ def get_users_with_id(instance_id, session_token, payload):
         return j_ref
     else:
         error = "There was error in downloading csv instance id: '{}' with status code:{}".format(instance_id, resp_status)
+        logging.error(error)
+        logging.error(df_response.text)
+        raise Exception(error)
+        return []
+
+def get_users_from_group_id(instance_id, session_token, payload):
+    list_DF_API = "https://{}.domo.com/api/content/v2/groups/users?{}".format(instance_id,payload)
+    
+    headers = {'Content-Type': 'application/json',
+                     'x-domo-authentication': session_token}
+    df_response = requests.get(url=list_DF_API, headers=headers)
+    resp_status = df_response.status_code
+    if resp_status == 200:
+        j_ref = json.loads(df_response.text)
+        logging.info('Successfully fetched all the users')
+        return j_ref
+    else:
+        error = "There was error! instance id: '{}' with status code:{}".format(instance_id, resp_status)
         logging.error(error)
         logging.error(df_response.text)
         raise Exception(error)
